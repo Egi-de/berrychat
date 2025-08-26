@@ -1,5 +1,4 @@
-// src/App.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -7,6 +6,8 @@ import {
   Navigate,
 } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "./firebase/config";
 import { useAuth } from "./hooks/useAuth";
 import { AuthProvider } from "./hooks/useAuth";
 
@@ -15,6 +16,7 @@ import WelcomePage from "./components/WelcomePage";
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
 import PhoneAuthPage from "./components/PhoneAuthPage";
+import UserProfileSetup from "./components/UserProfileSetup";
 
 // Import your main chat components
 import ChatApp from "./components/ChatApp";
@@ -29,6 +31,72 @@ const LoadingScreen = () => (
     </div>
   </div>
 );
+
+const AuthenticatedApp = () => {
+  const { currentUser, loading } = useAuth();
+  const [userProfile, setUserProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Check if user has completed profile setup
+  useEffect(() => {
+    const checkUserProfile = async () => {
+      if (!currentUser) {
+        setProfileLoading(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUserProfile(userData);
+        } else {
+          setUserProfile(null); // User needs to complete profile
+        }
+      } catch (error) {
+        console.error("Error checking user profile:", error);
+        setUserProfile(null);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    if (currentUser) {
+      checkUserProfile();
+    }
+  }, [currentUser]);
+
+  const handleProfileComplete = () => {
+    // Reload user profile after completion
+    const loadProfile = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          setUserProfile(userDoc.data());
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+      }
+    };
+    loadProfile();
+  };
+
+  if (loading || profileLoading) return <LoadingScreen />;
+
+  // If user is authenticated but hasn't completed profile setup
+  if (currentUser && !userProfile) {
+    return <UserProfileSetup onComplete={handleProfileComplete} />;
+  }
+
+  // If user is authenticated and has profile, show chat app
+  if (currentUser && userProfile) {
+    return <ChatApp />;
+  }
+
+  // If not authenticated, redirect to welcome
+  return <Navigate to="/welcome" replace />;
+};
 
 const ProtectedRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
@@ -85,12 +153,12 @@ function App() {
             }
           />
 
-          {/* Protected routes - only accessible when authenticated */}
+          {/* Protected routes - handles profile setup flow automatically */}
           <Route
             path="/chat"
             element={
               <ProtectedRoute>
-                <ChatApp />
+                <AuthenticatedApp />
               </ProtectedRoute>
             }
           />
