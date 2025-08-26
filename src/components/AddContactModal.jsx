@@ -1,231 +1,115 @@
-import React, { useState, useEffect } from "react";
-import { Search, UserPlus, X, Phone, Mail, Loader } from "lucide-react";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "../firebase/config";
-import { updateDocument } from "../firestore/helpers";
-import Avatar from "./Avatar";
+import { useState } from "react";
+import { db } from "../firebase";
+import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { useAuth } from "../contexts/AuthContext";
 
-const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [addingContact, setAddingContact] = useState(null);
-
-  // Debounced search effect
-  useEffect(() => {
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      searchUsers(searchTerm);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm]);
-
-  // 🔍 Search users
-  const searchUsers = async (term) => {
-    if (!term) return;
-
-    setIsSearching(true);
-    try {
-      const usersRef = collection(db, "users");
-      const normalized = term.toLowerCase();
-
-      // Search by email
-      const emailQuery = query(usersRef, where("email", "==", normalized));
-      const emailSnapshot = await getDocs(emailQuery);
-
-      // Search by phone (if valid format)
-      const phoneQuery =
-        normalized.startsWith("+") || /^\d+$/.test(normalized)
-          ? query(usersRef, where("phoneNumber", "==", normalized))
-          : null;
-      const phoneSnapshot = phoneQuery ? await getDocs(phoneQuery) : null;
-
-      // Search by display name (partial match)
-      const nameQuery = query(
-        usersRef,
-        where("displayName", ">=", term),
-        where("displayName", "<=", term + "\uf8ff")
-      );
-      const nameSnapshot = await getDocs(nameQuery);
-
-      // Combine results
-      const results = new Map();
-      [emailSnapshot, phoneSnapshot, nameSnapshot].forEach((snapshot) => {
-        if (snapshot) {
-          snapshot.forEach((doc) => {
-            const userData = { id: doc.id, ...doc.data() };
-            if (userData.uid !== currentUser.uid) {
-              results.set(userData.uid, userData);
-            }
-          });
-        }
-      });
-
-      setSearchResults(Array.from(results.values()));
-    } catch (error) {
-      console.error("Error searching users:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // ➕ Add contact
-  const addContact = async (userToAdd) => {
-    setAddingContact(userToAdd.uid);
-    try {
-      const currentContacts = currentUser.contacts || [];
-
-      if (currentContacts.includes(userToAdd.uid)) {
-        alert("User is already in your contacts");
-        return;
-      }
-
-      // Update current user's contacts
-      await updateDocument("users", currentUser.uid, {
-        contacts: [...currentContacts, userToAdd.uid],
-      });
-
-      // Optional: update the other user's contacts
-      const theirContacts = userToAdd.contacts || [];
-      if (!theirContacts.includes(currentUser.uid)) {
-        await updateDocument("users", userToAdd.uid, {
-          contacts: [...theirContacts, currentUser.uid],
-        });
-      }
-
-      onContactAdded(userToAdd);
-      setSearchTerm("");
-      setSearchResults([]);
-      alert(`${userToAdd.displayName} added to contacts!`);
-    } catch (error) {
-      console.error("Error adding contact:", error);
-      alert("Failed to add contact");
-    } finally {
-      setAddingContact(null);
-    }
-  };
+export default function AddContactModal({ isOpen, onClose }) {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { currentUser } = useAuth();
 
   if (!isOpen) return null;
 
+  const handleAddContact = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      if (email === currentUser.email) {
+        setError("❌ You cannot add yourself as a contact.");
+        setLoading(false);
+        return;
+      }
+
+      // Find user by email
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", email));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setError("⚠️ User not found.");
+        setLoading(false);
+        return;
+      }
+
+      let userToAdd = null;
+      querySnapshot.forEach((doc) => {
+        userToAdd = { id: doc.id, ...doc.data() };
+      });
+
+      if (!userToAdd) {
+        setError("⚠️ Something went wrong, user not found.");
+        setLoading(false);
+        return;
+      }
+
+      // Check if contact already exists
+      const contactsRef = collection(db, "users", currentUser.uid, "contacts");
+      const existingContactQ = query(
+        contactsRef,
+        where("email", "==", userToAdd.email)
+      );
+      const existingContactSnapshot = await getDocs(existingContactQ);
+
+      if (!existingContactSnapshot.empty) {
+        setError("ℹ️ This contact is already in your list.");
+        setLoading(false);
+        return;
+      }
+
+      // Add contact
+      await addDoc(contactsRef, {
+        email: userToAdd.email,
+        uid: userToAdd.id,
+      });
+
+      setEmail("");
+      onClose();
+    } catch (err) {
+      console.error("Error adding contact:", err);
+      setError("❌ Failed to add contact. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-2 duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-800">Add New Contact</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
-          >
-            <X size={20} className="text-gray-500" />
-          </button>
-        </div>
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50">
+      <div className="bg-white p-6 rounded-xl shadow-lg w-96">
+        <h2 className="text-xl font-semibold mb-4">Add New Contact</h2>
 
-        {/* Search Input */}
-        <div className="relative mb-6">
-          <Search
-            size={20}
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-          />
+        <form onSubmit={handleAddContact} className="space-y-4">
           <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by email, phone, or name..."
-            className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-purple-400 focus:bg-white outline-none transition-all duration-200"
+            type="email"
+            placeholder="Enter email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:ring-blue-400"
           />
-          {isSearching && (
-            <Loader
-              size={16}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 animate-spin"
-            />
-          )}
-        </div>
 
-        {/* Search Results */}
-        <div className="max-h-80 overflow-y-auto space-y-2">
-          {searchResults.length === 0 && searchTerm && !isSearching && (
-            <div className="text-center py-8 text-gray-500">
-              <UserPlus size={48} className="mx-auto mb-4 opacity-50" />
-              <p>No users found</p>
-              <p className="text-sm">
-                Try searching with email or phone number
-              </p>
-            </div>
-          )}
+          {error && <p className="text-red-500 text-sm">{error}</p>}
 
-          {searchResults.map((user) => (
-            <div
-              key={user.uid}
-              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-all duration-200"
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
             >
-              <div className="flex items-center space-x-3 flex-1">
-                <Avatar
-                  src={user.avatar}
-                  alt={user.displayName}
-                  size="md"
-                  status={user.status}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-800 truncate">
-                    {user.displayName}
-                  </div>
-                  <div className="flex items-center space-x-3 text-sm text-gray-500">
-                    {user.email && (
-                      <div className="flex items-center space-x-1">
-                        <Mail size={12} />
-                        <span className="truncate">{user.email}</span>
-                      </div>
-                    )}
-                    {user.phoneNumber && (
-                      <div className="flex items-center space-x-1">
-                        <Phone size={12} />
-                        <span>{user.phoneNumber}</span>
-                      </div>
-                    )}
-                  </div>
-                  {user.bio && (
-                    <div className="text-xs text-gray-400 truncate mt-1">
-                      {user.bio}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={() => addContact(user)}
-                disabled={addingContact === user.uid}
-                className="ml-3 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center space-x-2"
-              >
-                {addingContact === user.uid ? (
-                  <Loader size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <UserPlus size={16} />
-                    <span>Add</span>
-                  </>
-                )}
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {searchTerm === "" && (
-          <div className="text-center py-8 text-gray-500">
-            <Search size={48} className="mx-auto mb-4 opacity-50" />
-            <p>Search for users to add as contacts</p>
-            <p className="text-sm">Enter email, phone number, or name</p>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? "Adding..." : "Add"}
+            </button>
           </div>
-        )}
+        </form>
       </div>
     </div>
   );
-};
-
-export default AddContactModal;
+}
