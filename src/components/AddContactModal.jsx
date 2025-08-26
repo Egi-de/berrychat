@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, UserPlus, X, Phone, Mail, Loader } from "lucide-react";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -11,46 +11,54 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [addingContact, setAddingContact] = useState(null);
 
-  const searchUsers = async () => {
+  // Debounced search effect
+  useEffect(() => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
       return;
     }
 
+    const timeoutId = setTimeout(() => {
+      searchUsers(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  // 🔍 Search users
+  const searchUsers = async (term) => {
+    if (!term) return;
+
     setIsSearching(true);
     try {
       const usersRef = collection(db, "users");
+      const normalized = term.toLowerCase();
 
       // Search by email
-      const emailQuery = query(
-        usersRef,
-        where("email", "==", searchTerm.toLowerCase())
-      );
+      const emailQuery = query(usersRef, where("email", "==", normalized));
       const emailSnapshot = await getDocs(emailQuery);
 
-      // Search by phone (if it looks like a phone number)
+      // Search by phone (if valid format)
       const phoneQuery =
-        searchTerm.startsWith("+") || /^\d+$/.test(searchTerm)
-          ? query(usersRef, where("phoneNumber", "==", searchTerm))
+        normalized.startsWith("+") || /^\d+$/.test(normalized)
+          ? query(usersRef, where("phoneNumber", "==", normalized))
           : null;
       const phoneSnapshot = phoneQuery ? await getDocs(phoneQuery) : null;
 
       // Search by display name (partial match)
       const nameQuery = query(
         usersRef,
-        where("displayName", ">=", searchTerm),
-        where("displayName", "<=", searchTerm + "\uf8ff")
+        where("displayName", ">=", term),
+        where("displayName", "<=", term + "\uf8ff")
       );
       const nameSnapshot = await getDocs(nameQuery);
 
-      const results = new Map();
-
       // Combine results
+      const results = new Map();
       [emailSnapshot, phoneSnapshot, nameSnapshot].forEach((snapshot) => {
         if (snapshot) {
           snapshot.forEach((doc) => {
             const userData = { id: doc.id, ...doc.data() };
-            // Don't include current user in results
             if (userData.uid !== currentUser.uid) {
               results.set(userData.uid, userData);
             }
@@ -67,45 +75,40 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
     }
   };
 
+  // ➕ Add contact
   const addContact = async (userToAdd) => {
     setAddingContact(userToAdd.uid);
     try {
-      // Get current user's contacts
       const currentContacts = currentUser.contacts || [];
 
-      // Check if already a contact
       if (currentContacts.includes(userToAdd.uid)) {
         alert("User is already in your contacts");
         return;
       }
 
-      // Add to current user's contacts
-      const updatedContacts = [...currentContacts, userToAdd.uid];
-      const result = await updateDocument("users", currentUser.uid, {
-        contacts: updatedContacts,
+      // Update current user's contacts
+      await updateDocument("users", currentUser.uid, {
+        contacts: [...currentContacts, userToAdd.uid],
       });
 
-      if (result.success) {
-        onContactAdded(userToAdd);
-        setSearchTerm("");
-        setSearchResults([]);
-        alert(`${userToAdd.displayName} added to contacts!`);
-      } else {
-        alert("Failed to add contact: " + result.error);
+      // Optional: update the other user's contacts
+      const theirContacts = userToAdd.contacts || [];
+      if (!theirContacts.includes(currentUser.uid)) {
+        await updateDocument("users", userToAdd.uid, {
+          contacts: [...theirContacts, currentUser.uid],
+        });
       }
+
+      onContactAdded(userToAdd);
+      setSearchTerm("");
+      setSearchResults([]);
+      alert(`${userToAdd.displayName} added to contacts!`);
     } catch (error) {
       console.error("Error adding contact:", error);
       alert("Failed to add contact");
     } finally {
       setAddingContact(null);
     }
-  };
-
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-    // Debounce search
-    const timeoutId = setTimeout(searchUsers, 500);
-    return () => clearTimeout(timeoutId);
   };
 
   if (!isOpen) return null;
@@ -133,7 +136,7 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
           <input
             type="text"
             value={searchTerm}
-            onChange={handleSearch}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by email, phone, or name..."
             className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-purple-400 focus:bg-white outline-none transition-all duration-200"
           />
