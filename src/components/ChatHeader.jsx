@@ -28,14 +28,14 @@ const ChatHeader = ({ user, onBack, isGroup = false }) => {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 bg-white/95 backdrop-blur-lg border-b border-gray-200 shadow-sm">
+    <div className="flex items-center justify-between  bg-[#F7F9FC]/9 backdrop-blur-lg border-b border-[#4CC9F0]/20 shadow-sm">
       {/* Left section */}
       <div className="flex items-center space-x-3 flex-1 min-w-0">
         <button
           onClick={onBack}
-          className="p-2 hover:bg-gray-100 rounded-full md:hidden transition-all duration-200 hover:scale-110 active:scale-95"
+          className="p-2 hover:bg-[#4CC9F0]/20 rounded-full md:hidden transition-all duration-200 hover:scale-110 active:scale-95"
         >
-          <ArrowLeft size={20} className="text-gray-600" />
+          <ArrowLeft size={20} className="text-[#3A0CA3]" />
         </button>
 
         <Avatar
@@ -47,10 +47,10 @@ const ChatHeader = ({ user, onBack, isGroup = false }) => {
         />
 
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-gray-800 truncate text-lg">
+          <h3 className="font-semibold text-[#0F172A] truncate text-lg">
             {user?.name}
             {isGroup && (
-              <span className="ml-2 text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+              <span className="ml-2 text-xs bg-[#4CC9F0]/20 text-[#3A0CA3] px-2 py-1 rounded-full">
                 Group
               </span>
             )}
@@ -59,7 +59,7 @@ const ChatHeader = ({ user, onBack, isGroup = false }) => {
             className={`text-sm truncate transition-colors duration-200 ${
               user?.status === "online"
                 ? "text-green-600 font-medium"
-                : "text-gray-500"
+                : "text-[#0F172A]/50"
             }`}
           >
             {getLastSeenText()}
@@ -69,31 +69,31 @@ const ChatHeader = ({ user, onBack, isGroup = false }) => {
 
       {/* Right section - Action buttons */}
       <div className="flex items-center space-x-1 relative">
-        <button className="p-2.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200 hover:scale-110 active:scale-95">
+        <button className="p-2.5 text-[#3A0CA3] hover:text-[#4361EE] hover:bg-[#4CC9F0]/20 rounded-full transition-all duration-200 hover:scale-110 active:scale-95">
           <Phone size={20} />
         </button>
 
         <div className="relative">
           <button
             onClick={() => setShowDropdown(!showDropdown)}
-            className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110 active:scale-95"
+            className="p-2.5 text-[#3A0CA3] hover:text-[#4361EE] hover:bg-[#4CC9F0]/20 rounded-full transition-all duration-200 hover:scale-110 active:scale-95"
           >
             <MoreVertical size={20} />
           </button>
 
           {/* Dropdown menu */}
           {showDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 animate-in slide-in-from-top-2 duration-200">
-              <button className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors duration-200">
+            <div className="absolute right-0 mt-2 w-48 bg-[#F7F9FC] rounded-xl shadow-xl border border-[#4CC9F0]/20 py-2 z-50 animate-in slide-in-from-top-2 duration-200">
+              <button className="w-full px-4 py-2 text-left text-[#0F172A] hover:bg-[#4CC9F0]/10 flex items-center space-x-3 transition-colors duration-200">
                 <Info size={16} />
                 <span>Contact info</span>
               </button>
-              <button className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors duration-200">
+              <button className="w-full px-4 py-2 text-left text-[#0F172A] hover:bg-[#4CC9F0]/10 flex items-center space-x-3 transition-colors duration-200">
                 <Search size={16} />
                 <span>Search messages</span>
               </button>
-              <hr className="my-2 border-gray-100" />
-              <button className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors duration-200">
+              <hr className="my-2 border-[#4CC9F0]/20" />
+              <button className="w-full px-4 py-2 text-left text-[#4361EE] hover:bg-[#4361EE]/10 flex items-center space-x-3 transition-colors duration-200">
                 <span>Block contact</span>
               </button>
             </div>

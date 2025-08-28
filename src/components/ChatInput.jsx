@@ -301,13 +301,15 @@ const ChatInput = ({
           // Create a blob URL for local playback
           const blobUrl = URL.createObjectURL(audioFile._blob);
 
-          handleSendVoiceMessage({
+          const voiceFileData = {
             name: audioFile.name,
             type: audioFile.type,
             size: audioFile.size,
             url: blobUrl,
             blob: audioFile._blob, // Store the blob for Firebase
-          });
+          };
+
+          handleSendVoiceMessage(voiceFileData);
         } catch (error) {
           console.error("Voice message creation failed:", error);
           alert(`Failed to create voice message: ${error.message}`);
@@ -419,7 +421,7 @@ const ChatInput = ({
 
   if (isRecording) {
     return (
-      <div className="p-4 bg-white/95 backdrop-blur-lg border-t border-gray-200">
+      <div className="p-4 bg-[#F7F9FC]/95 backdrop-blur-lg border-t border-[#4CC9F0]/20">
         <VoiceRecorder
           onStop={stopRecording}
           onCancel={() => {
@@ -436,24 +438,24 @@ const ChatInput = ({
   }
 
   return (
-    <div className="bg-white/95 backdrop-blur-lg border-t border-gray-200">
+    <div className="bg-[#F7F9FC]/9 backdrop-blur-lg border-t border-[#4CC9F0]/20">
       {/* Reply preview */}
       {replyTo && (
         <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-          <div className="flex items-center justify-between bg-purple-50 rounded-lg p-3">
+          <div className="flex items-center justify-between bg-[#4CC9F0]/10 rounded-lg p-3">
             <div className="flex-1">
-              <div className="text-sm font-medium text-purple-600 mb-1">
+              <div className="text-sm font-medium text-[#3A0CA3] mb-1">
                 Replying to {replyTo.senderName || "Unknown"}
               </div>
-              <div className="text-sm text-gray-700 truncate">
+              <div className="text-sm text-[#0F172A]/70 truncate">
                 {replyTo.text || "📎 Media message"}
               </div>
             </div>
             <button
               onClick={onCancelReply}
-              className="ml-2 p-1 hover:bg-purple-100 rounded-full transition-colors duration-200"
+              className="ml-2 p-1 hover:bg-[#4CC9F0]/20 rounded-full transition-colors duration-200"
             >
-              <X size={16} className="text-purple-600" />
+              <X size={16} className="text-[#3A0CA3]" />
             </button>
           </div>
         </div>
@@ -533,7 +535,7 @@ const ChatInput = ({
       )}
 
       {/* Input area */}
-      <div className="p-4">
+      <div className="p-2">
         <div className="flex items-end space-x-3">
           <button
             onClick={() => setShowAttachments(!showAttachments)}
@@ -555,8 +557,8 @@ const ChatInput = ({
               onKeyDown={handleKeyDown}
               placeholder={uploading ? "Uploading files..." : placeholder}
               disabled={disabled || uploading}
-              className="w-full resize-none bg-gray-50 border-2 border-gray-200 rounded-3xl px-6 py-3 pr-12 focus:border-purple-400 focus:bg-white outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ minHeight: "48px", maxHeight: "120px" }}
+              className="w-full resize-none bg-[#F7F9FC]/50 border-2 border-[#4CC9F0]/30 rounded-3xl px-6 py-3 pr-12 focus:border-[#4361EE] focus:bg-[#F7F9FC] outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ minHeight: "48px", maxHeight: "12px" }}
             />
 
             {/* Emoji picker */}
@@ -580,7 +582,7 @@ const ChatInput = ({
             <button
               onClick={handleSend}
               disabled={disabled || uploading || files.some((f) => f.uploading)}
-              className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="p-3 bg-gradient-to-r from-[#3A0CA3] to-[#4361EE] hover:from-[#4361EE] hover:to-[#4CC9F0] text-[#F7F9FC] rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <Send size={20} />
             </button>
@@ -588,7 +590,7 @@ const ChatInput = ({
             <button
               onClick={startRecording}
               disabled={disabled || uploading}
-              className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-purple-500 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="p-3 bg-[#4CC9F0]/20 hover:bg-[#4CC9F0]/30 text-[#3A0CA3] hover:text-[#4361EE] rounded-full transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <Mic size={20} />
             </button>

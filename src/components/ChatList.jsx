@@ -323,8 +323,8 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
 
   if (loading) {
     return (
-      <div className="h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-center">
+      <div className="h-screen bg-[#0F172A]  text-[#F7F9FC] flex items-center justify-center">
+        <div className="text-center w-110">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
           <p>Loading chats...</p>
         </div>
@@ -333,7 +333,7 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
   }
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex">
+    <div className="h-screen w-300 bg-[#0F172A] text-[#F7F9FC] flex">
       {/* Left Sidebar */}
       <div className="w-12 bg-gray-800 flex flex-col items-center py-3 space-y-3 border-r border-gray-700">
         {/* Navigation Icons */}
@@ -382,7 +382,7 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
         </div>
 
         {/* Bottom Icons */}
-        <div className="flex-1 flex flex-col justify-end items-center space-y-3 pb-2">
+        <div className="flex-1 flex flex-col justify-end items-center space-y-3 pb-10">
           <button
             className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-200"
             title="Settings"

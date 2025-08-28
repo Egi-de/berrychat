@@ -71,8 +71,8 @@ const BerryChat = () => {
             timestamp: data.timestamp?.toDate() || new Date(),
           };
 
-          // For voice messages, convert base64 back to blob URL if needed
-          if (data.type === "voice" && data.voiceBlob && !data.mediaUrl) {
+          // For voice messages, always recreate blob URL from base64 data
+          if (data.type === "voice" && data.voiceBlob) {
             try {
               // Convert base64 back to blob
               const base64Data = data.voiceBlob.split(",")[1];
@@ -89,6 +89,13 @@ const BerryChat = () => {
               const blob = new Blob([byteArray], { type: mimeType });
               const blobUrl = URL.createObjectURL(blob);
               processedData.mediaUrl = blobUrl;
+
+              console.log("Recreated blob URL for voice message:", {
+                messageId: doc.id,
+                mimeType,
+                blobSize: blob.size,
+                blobUrl,
+              });
             } catch (error) {
               console.error("Error recreating blob URL:", error);
             }
@@ -159,6 +166,8 @@ const BerryChat = () => {
     // Debug logging for voice messages
     if (messageData.type === "voice") {
       console.log("Sending voice message:", messageData);
+      console.log("Voice message files:", messageData.files);
+      console.log("Voice message blob:", messageData.files?.[0]?.blob);
     }
 
     // Process files safely - Skip file processing for voice messages
@@ -198,7 +207,7 @@ const BerryChat = () => {
       });
     }
 
-    const messagePayload = {
+    let messagePayload = {
       senderId: currentUser.uid,
       senderName: currentUser.displayName || currentUser.email || "Anonymous",
       text: messageData.text || "",
@@ -206,15 +215,27 @@ const BerryChat = () => {
       status: "sent",
       type: messageData.type || "text",
       ...(processedFiles && { files: processedFiles }),
-      // For voice messages, store the blob URL and blob data
-      ...(messageData.type === "voice" && {
-        mediaUrl: messageData.mediaUrl,
-        voiceBlob: messageData.files?.[0]?.blob
-          ? await blobToBase64(messageData.files[0].blob)
-          : null,
-      }),
       ...(messageData.replyTo && { replyTo: messageData.replyTo }),
     };
+
+    // Handle voice messages separately
+    if (messageData.type === "voice") {
+      const voiceBlob = messageData.files?.[0]?.blob
+        ? await blobToBase64(messageData.files[0].blob)
+        : null;
+
+      console.log("Voice blob base64 created:", {
+        hasBlob: !!messageData.files?.[0]?.blob,
+        base64Length: voiceBlob?.length,
+        base64Preview: voiceBlob?.substring(0, 50) + "...",
+      });
+
+      messagePayload = {
+        ...messagePayload,
+        mediaUrl: messageData.mediaUrl,
+        voiceBlob: voiceBlob,
+      };
+    }
 
     try {
       const result = await createDocument(
@@ -259,113 +280,120 @@ const BerryChat = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-purple-50 via-pink-25 to-indigo-50 overflow-hidden">
-      <div className="flex h-full">
-        {/* Chat List - Hidden on mobile when chat is selected */}
-        <div
-          className={`${
-            isMobile && selectedChat ? "hidden" : "flex"
-          } w-full md:w-80 border-r border-gray-200/50`}
-        >
-          <ChatList
-            onSelectChat={setSelectedChat}
-            selectedChat={selectedChat}
-            onLogout={handleLogout}
-          />
-        </div>
+    <div className="h-screen bg-gradient-to-br from-[#416cad] via-[#F7F9FC]/80 to-[#F7F9FC]/60 overflow-hidden p-4">
+      <div className="max-w-7xl mx-auto h-full">
+        <div className="flex h-full shadow-2xl rounded-2xl overflow-hidden bg-[#F7F9FC]/20 backdrop-blur-lg border border-[#4CC9F0]/20">
+          {/* Chat List - Hidden on mobile when chat is selected */}
+          <div
+            className={`${
+              isMobile && selectedChat ? "hidden" : "flex"
+            } w-full md:w-96 lg:w-[420px] xl:w-[480px] border-r border-gray-200/50`}
+          >
+            <ChatList
+              onSelectChat={setSelectedChat}
+              selectedChat={selectedChat}
+              onLogout={handleLogout}
+            />
+          </div>
 
-        {/* Chat Interface */}
-        <div
-          className={`${
-            isMobile && !selectedChat ? "hidden" : "flex"
-          } flex-1 flex-col`}
-        >
-          {selectedChat ? (
-            <>
-              {/* Chat Header */}
-              <ChatHeader
-                user={selectedChat}
-                onBack={handleBack}
-                isGroup={selectedChat.isGroup}
-              />
+          {/* Chat Interface */}
+          <div
+            className={`${
+              isMobile && !selectedChat ? "hidden" : "flex"
+            } flex-1 flex-col`}
+          >
+            {selectedChat ? (
+              <>
+                {/* Chat Header */}
+                <ChatHeader
+                  user={selectedChat}
+                  onBack={handleBack}
+                  isGroup={selectedChat.isGroup}
+                />
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-purple-50/30 to-pink-50/30">
-                {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-500">
-                    <div className="text-center">
-                      <MessageCircle
-                        size={48}
-                        className="mx-auto mb-4 opacity-50"
-                      />
-                      <p>Start your conversation with {selectedChat.name}</p>
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-[#F7F9FC]/30 to-[#F7F9FC]/10">
+                  {messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-500">
+                      <div className="text-center">
+                        <MessageCircle
+                          size={48}
+                          className="mx-auto mb-4 opacity-50"
+                        />
+                        <p>Start your conversation with {selectedChat.name}</p>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  messages.map((message) => {
-                    const isOwn = message.senderId === currentUser.uid;
-                    const user = isOwn ? currentUser : selectedChat;
-                    const replyToMessage = message.replyTo
-                      ? getReplyToMessage(message.replyTo)
-                      : null;
+                  ) : (
+                    messages.map((message) => {
+                      const isOwn = message.senderId === currentUser.uid;
+                      const user = isOwn ? currentUser : selectedChat;
+                      const replyToMessage = message.replyTo
+                        ? getReplyToMessage(message.replyTo)
+                        : null;
 
-                    return (
-                      <MessageBubble
-                        key={message.id}
-                        message={message}
-                        isOwn={isOwn}
-                        user={user}
-                        onReply={handleReply}
-                        replyToMessage={replyToMessage}
-                      />
-                    );
-                  })
-                )}
+                      return (
+                        <MessageBubble
+                          key={message.id}
+                          message={message}
+                          isOwn={isOwn}
+                          user={user}
+                          onReply={handleReply}
+                          replyToMessage={replyToMessage}
+                        />
+                      );
+                    })
+                  )}
 
-                {/* Sending indicator */}
-                {sendingMessage && (
-                  <div className="flex justify-end">
-                    <div className="bg-gray-200 text-gray-600 px-4 py-2 rounded-2xl animate-pulse">
-                      Sending...
+                  {/* Sending indicator */}
+                  {sendingMessage && (
+                    <div className="flex justify-end">
+                      <div className="bg-gray-200 text-gray-600 px-4 py-2 rounded-2xl animate-pulse">
+                        Sending...
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
 
-              {/* Chat Input */}
-              <ChatInput
-                onSendMessage={handleSendMessage}
-                replyTo={replyTo}
-                onCancelReply={() => setReplyTo(null)}
-                disabled={sendingMessage}
-                placeholder={`Message ${selectedChat.name}...`}
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
-              <div className="text-center text-gray-500">
-                <MessageCircle size={64} className="mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold mb-2">
-                  Welcome to BerryChat
-                </h3>
-                <p className="mb-4">Select a conversation to start messaging</p>
-                {currentUser && (
-                  <div className="space-y-2">
-                    <p className="text-sm">
-                      Logged in as:{" "}
-                      {currentUser.displayName || currentUser.email}
-                    </p>
-                    <button
-                      onClick={handleLogout}
-                      className="px-4 py-2 text-purple-600 hover:text-purple-700 font-medium hover:bg-purple-50 rounded-lg transition-colors duration-200"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                )}
+                {/* Chat Input */}
+                <ChatInput
+                  onSendMessage={handleSendMessage}
+                  replyTo={replyTo}
+                  onCancelReply={() => setReplyTo(null)}
+                  disabled={sendingMessage}
+                  placeholder={`Message ${selectedChat.name}...`}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-[#F7F9FC] to-[#F7F9FC]/80">
+                <div className="text-center text-gray-500">
+                  <MessageCircle
+                    size={64}
+                    className="mx-auto mb-4 opacity-50"
+                  />
+                  <h3 className="text-xl font-semibold mb-2">
+                    Welcome to BerryChat
+                  </h3>
+                  <p className="mb-4">
+                    Select a conversation to start messaging
+                  </p>
+                  {currentUser && (
+                    <div className="space-y-2">
+                      <p className="text-sm">
+                        Logged in as:{" "}
+                        {currentUser.displayName || currentUser.email}
+                      </p>
+                      <button
+                        onClick={handleLogout}
+                        className="px-4 py-2 text-[#3A0CA3] hover:text-[#4361EE] font-medium hover:bg-[#4CC9F0]/10 rounded-lg transition-colors duration-200"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

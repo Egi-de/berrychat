@@ -342,30 +342,32 @@ const MessageBubble = ({
           </div>
         )}
         <div
-          className={`flex flex-col px-4 py-3 rounded-2xl backdrop-blur-md border shadow-lg relative transition-all duration-300 hover:shadow-xl ${
+          className={`flex gap-4 px-4 py-3 rounded-2xl backdrop-blur-md border shadow-lg relative transition-all duration-300 hover:shadow-xl ${
             isOwn
-              ? "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white ml-2 rounded-br-md"
-              : "bg-white/90 text-gray-800 mr-2 rounded-bl-md border-gray-200"
+              ? "bg-gradient-to-br from-[#3A0CA3] via-[#4361EE] to-[#4CC9F0] text-[#F7F9FC] ml-2 rounded-br-md"
+              : "bg-[#F7F9FC]/90 text-[#0F172A] mr-2 rounded-bl-md border-[#4CC9F0]/20"
           }`}
         >
           {replyToMessage && (
             <div
               className={`mb-3 p-3 rounded-lg border-l-4 text-sm transition-all duration-200 hover:bg-opacity-80 ${
                 isOwn
-                  ? "bg-white/20 border-white/50"
-                  : "bg-gray-100 border-purple-400"
+                  ? "bg-[#F7F9FC]/20 border-[#F7F9FC]/50"
+                  : "bg-[#4CC9F0]/10 border-[#4361EE]"
               }`}
             >
               <div
                 className={`font-medium text-xs mb-1 ${
-                  isOwn ? "text-white/80" : "text-purple-600"
+                  isOwn ? "text-[#F7F9FC]/80" : "text-[#3A0CA3]"
                 }`}
               >
                 Replying to{" "}
                 {replyToMessage.senderId === user?.id ? user?.name : "You"}
               </div>
               <div
-                className={`${isOwn ? "text-white/90" : "text-gray-700"}`}
+                className={`${
+                  isOwn ? "text-[#F7F9FC]/90" : "text-[#0F172A]/80"
+                }`}
                 style={{
                   display: "-webkit-box",
                   WebkitLineClamp: 2,
@@ -440,31 +442,31 @@ const MessageBubble = ({
                     onClick={toggleVoicePlayback}
                     className={`p-3 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 shadow-md ${
                       isOwn
-                        ? "bg-white/20 hover:bg-white/30"
-                        : "bg-purple-100 hover:bg-purple-200"
+                        ? "bg-[#F7F9FC]/20 hover:bg-[#F7F9FC]/30"
+                        : "bg-[#4CC9F0]/20 hover:bg-[#4CC9F0]/30"
                     }`}
                   >
                     {isPlayingVoice ? (
                       <Pause
                         size={16}
-                        className={isOwn ? "text-white" : "text-purple-600"}
+                        className={isOwn ? "text-[#F7F9FC]" : "text-[#3A0CA3]"}
                       />
                     ) : (
                       <Play
                         size={16}
-                        className={isOwn ? "text-white" : "text-purple-600"}
+                        className={isOwn ? "text-[#F7F9FC]" : "text-[#3A0CA3]"}
                       />
                     )}
                   </button>
                   <div className="flex-1 h-8 flex items-center">
                     <div
                       className={`w-full h-2 rounded-full relative ${
-                        isOwn ? "bg-white/30" : "bg-gray-200"
+                        isOwn ? "bg-[#F7F9FC]/30" : "bg-[#4CC9F0]/20"
                       }`}
                     >
                       <div
                         className={`h-2 rounded-full transition-all duration-300 ${
-                          isOwn ? "bg-white" : "bg-purple-500"
+                          isOwn ? "bg-[#F7F9FC]" : "bg-[#4361EE]"
                         }`}
                         style={{ width: `${voiceProgress}%` }}
                       ></div>

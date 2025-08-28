@@ -99,7 +99,7 @@ const LoginPage = () => {
     ) : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-25 to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-[#3A0CA3] via-[#4361EE] to-[#4CC9F0] flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <button

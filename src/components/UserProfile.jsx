@@ -80,17 +80,20 @@ const ImageCropper = ({ image, onCropComplete, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
+    <div className="fixed inset-0 bg-[#0F172A]/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-[#F7F9FC] rounded-lg p-6 max-w-md w-full">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold">Crop Image</h3>
-          <button onClick={onCancel} className="p-1 hover:bg-gray-100 rounded">
+          <button
+            onClick={onCancel}
+            className="p-1 hover:bg-[#4CC9F0]/20 rounded"
+          >
             <X size={20} />
           </button>
         </div>
 
         <div className="relative mb-4">
-          <div className="w-64 h-64 mx-auto bg-gray-100 rounded-lg overflow-hidden relative">
+          <div className="w-64 h-64 mx-auto bg-[#4CC9F0]/10 rounded-lg overflow-hidden relative">
             <img
               src={image}
               alt="Crop preview"
@@ -134,13 +137,13 @@ const ImageCropper = ({ image, onCropComplete, onCancel }) => {
         <div className="flex space-x-3">
           <button
             onClick={onCancel}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-[#4CC9F0]/30 rounded-lg hover:bg-[#4CC9F0]/10 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleCropSave}
-            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex-1 px-4 py-2 bg-[#3A0CA3] text-[#F7F9FC] rounded-lg hover:bg-[#4361EE] transition-colors"
           >
             Save
           </button>
@@ -336,16 +339,16 @@ const UserProfile = ({ user, isOpen, onClose, onUpdateProfile }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-        <div className="bg-gray-900 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
+      <div className="fixed inset-0 bg-[#0F172A]/50 flex items-center justify-center z-40 p-4">
+        <div className="bg-[#0F172A] rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="flex items-center justify-between p-4 border-b border-[#4CC9F0]/20">
             <h2 className="text-xl font-semibold text-white">Profile</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-2 hover:bg-[#4CC9F0]/20 rounded-lg transition-colors"
               aria-label="Close profile"
             >
-              <X size={20} className="text-gray-400" />
+              <X size={20} className="text-[#F7F9FC]" />
             </button>
           </div>
 
