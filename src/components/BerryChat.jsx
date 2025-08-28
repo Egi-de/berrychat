@@ -1,5 +1,6 @@
-// src/components/ChatApp.jsx
-import React, { useState, useEffect } from "react";
+"use client";
+
+import { useState, useEffect } from "react";
 import { MessageCircle } from "lucide-react";
 import {
   collection,
@@ -7,6 +8,8 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  writeBatch,
+  doc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { createDocument } from "../firestore/helpers";
@@ -16,38 +19,13 @@ import ChatHeader from "./ChatHeader";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 
-const ChatApp = () => {
+const BerryChat = () => {
   const { currentUser, logout } = useAuth();
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sendingMessage, setSendingMessage] = useState(false);
-
-  // Sample chat data
-  const chats = [
-    {
-      id: "user2",
-      name: "Alice Johnson",
-      avatar: null,
-      status: "online",
-      lastSeen: new Date().toISOString(),
-    },
-    {
-      id: "user3",
-      name: "Bob Wilson",
-      avatar: null,
-      status: "offline",
-      lastSeen: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: "user4",
-      name: "Carol Smith",
-      avatar: null,
-      status: "online",
-      lastSeen: new Date().toISOString(),
-    },
-  ];
 
   useEffect(() => {
     const handleResize = () => {
@@ -61,16 +39,19 @@ const ChatApp = () => {
   useEffect(() => {
     if (!selectedChat || !currentUser) return;
 
-    const chatId = getChatId(currentUser.uid, selectedChat.id);
-    console.log("Setting up message listener for chatId:", chatId);
+    console.log("Setting up message listener for chatId:", selectedChat.chatId);
 
-    const messagesRef = collection(db, "chats", chatId, "messages");
+    const messagesRef = collection(
+      db,
+      "chats",
+      selectedChat.chatId,
+      "messages"
+    );
     const q = query(messagesRef, orderBy("timestamp", "asc"));
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        console.log("Received snapshot with", snapshot.size, "messages");
         const messageList = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
@@ -80,8 +61,37 @@ const ChatApp = () => {
             timestamp: data.timestamp?.toDate() || new Date(),
           });
         });
-        console.log("Updated messages:", messageList);
         setMessages(messageList);
+
+        const unreadMessages = messageList.filter(
+          (msg) =>
+            msg.senderId !== currentUser.uid &&
+            (!msg.status || msg.status !== "read")
+        );
+
+        if (unreadMessages.length > 0) {
+          const markAsRead = async () => {
+            try {
+              const batch = writeBatch(db);
+              unreadMessages.forEach((msg) => {
+                const msgRef = doc(
+                  db,
+                  "chats",
+                  selectedChat.chatId,
+                  "messages",
+                  msg.id
+                );
+                batch.update(msgRef, { status: "read" });
+              });
+              await batch.commit();
+            } catch (error) {
+              console.error("Error auto-marking messages as read:", error);
+            }
+          };
+
+          // Small delay to ensure UI is ready
+          setTimeout(markAsRead, 500);
+        }
       },
       (error) => {
         console.error("Error listening to messages:", error);
@@ -90,11 +100,6 @@ const ChatApp = () => {
 
     return () => unsubscribe();
   }, [selectedChat, currentUser]);
-
-  // Generate consistent chat ID for two users
-  const getChatId = (userId1, userId2) => {
-    return [userId1, userId2].sort().join("_");
-  };
 
   const handleSendMessage = async (messageData) => {
     if (!selectedChat || !currentUser) {
@@ -108,7 +113,19 @@ const ChatApp = () => {
     }
 
     setSendingMessage(true);
-    const chatId = getChatId(currentUser.uid, selectedChat.id);
+    const chatId = selectedChat.chatId;
+
+    // Process files (in a real app, you'd upload these to Firebase Storage)
+    let processedFiles = null;
+    if (messageData.files && messageData.files.length > 0) {
+      processedFiles = messageData.files.map((file) => ({
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        // In production, upload to Firebase Storage and store the download URL
+        url: URL.createObjectURL(file),
+      }));
+    }
 
     const messagePayload = {
       senderId: currentUser.uid,
@@ -117,13 +134,9 @@ const ChatApp = () => {
       timestamp: serverTimestamp(),
       status: "sent",
       type: messageData.type || "text",
-      ...(messageData.files &&
-        messageData.files.length > 0 && { files: messageData.files }),
+      ...(processedFiles && { files: processedFiles }),
       ...(messageData.replyTo && { replyTo: messageData.replyTo }),
     };
-
-    console.log("Sending message with payload:", messagePayload);
-    console.log("To path: chats/" + chatId + "/messages");
 
     try {
       const result = await createDocument(
@@ -132,13 +145,14 @@ const ChatApp = () => {
       );
 
       if (result.success) {
-        console.log("Message sent successfully with ID:", result.id);
         setReplyTo(null);
       } else {
         console.error("Failed to send message:", result.error);
+        alert("Failed to send message: " + result.error);
       }
     } catch (error) {
       console.error("Error sending message:", error);
+      alert("Failed to send message");
     } finally {
       setSendingMessage(false);
     }
@@ -158,12 +172,13 @@ const ChatApp = () => {
     setReplyTo(null);
   };
 
-  // Debug info
-  useEffect(() => {
-    console.log("Current user:", currentUser);
-    console.log("Selected chat:", selectedChat);
-    console.log("Messages count:", messages.length);
-  }, [currentUser, selectedChat, messages]);
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
     <div className="h-screen bg-gradient-to-br from-purple-50 via-pink-25 to-indigo-50 overflow-hidden">
@@ -175,11 +190,9 @@ const ChatApp = () => {
           } w-full md:w-80 border-r border-gray-200/50`}
         >
           <ChatList
-            chats={chats}
-            selectedChat={selectedChat}
             onSelectChat={setSelectedChat}
-            currentUser={currentUser}
-            messages={messages}
+            selectedChat={selectedChat}
+            onLogout={handleLogout}
           />
         </div>
 
@@ -192,7 +205,11 @@ const ChatApp = () => {
           {selectedChat ? (
             <>
               {/* Chat Header */}
-              <ChatHeader user={selectedChat} onBack={handleBack} />
+              <ChatHeader
+                user={selectedChat}
+                onBack={handleBack}
+                isGroup={selectedChat.isGroup}
+              />
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-purple-50/30 to-pink-50/30">
@@ -204,11 +221,6 @@ const ChatApp = () => {
                         className="mx-auto mb-4 opacity-50"
                       />
                       <p>Start your conversation with {selectedChat.name}</p>
-                      {currentUser && (
-                        <p className="text-xs mt-2">
-                          Logged in as: {currentUser.email}
-                        </p>
-                      )}
                     </div>
                   </div>
                 ) : (
@@ -235,7 +247,7 @@ const ChatApp = () => {
                 {/* Sending indicator */}
                 {sendingMessage && (
                   <div className="flex justify-end">
-                    <div className="bg-gray-200 text-gray-600 px-4 py-2 rounded-2xl">
+                    <div className="bg-gray-200 text-gray-600 px-4 py-2 rounded-2xl animate-pulse">
                       Sending...
                     </div>
                   </div>
@@ -248,6 +260,7 @@ const ChatApp = () => {
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}
                 disabled={sendingMessage}
+                placeholder={`Message ${selectedChat.name}...`}
               />
             </>
           ) : (
@@ -257,18 +270,21 @@ const ChatApp = () => {
                 <h3 className="text-xl font-semibold mb-2">
                   Welcome to BerryChat
                 </h3>
-                <p className="mb-4">Select a chat to start messaging</p>
+                <p className="mb-4">Select a conversation to start messaging</p>
                 {currentUser && (
-                  <p className="text-sm mb-4">
-                    Logged in as: {currentUser.email}
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      Logged in as:{" "}
+                      {currentUser.displayName || currentUser.email}
+                    </p>
+                    <button
+                      onClick={handleLogout}
+                      className="px-4 py-2 text-purple-600 hover:text-purple-700 font-medium hover:bg-purple-50 rounded-lg transition-colors duration-200"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
                 )}
-                <button
-                  onClick={logout}
-                  className="px-4 py-2 text-purple-600 hover:text-purple-700 font-medium hover:bg-purple-50 rounded-lg transition-colors duration-200"
-                >
-                  Sign Out
-                </button>
               </div>
             </div>
           )}
@@ -278,4 +294,4 @@ const ChatApp = () => {
   );
 };
 
-export default ChatApp;
+export default BerryChat;

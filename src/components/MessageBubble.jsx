@@ -11,7 +11,7 @@ const MessageBubble = ({ message, isOwn, user, onReply, replyToMessage }) => {
     <div
       className={`flex mb-4 group ${
         isOwn ? "justify-end" : "justify-start"
-      } animate-in slide-in-from-bottom-2 duration-300`}
+      } animate-in slide-in-from-bottom-2 duration-100`}
       onMouseEnter={() => setShowReplyButton(true)}
       onMouseLeave={() => setShowReplyButton(false)}
     >
@@ -30,7 +30,7 @@ const MessageBubble = ({ message, isOwn, user, onReply, replyToMessage }) => {
         )}
 
         <div
-          className={`px-4 py-3 rounded-2xl backdrop-blur-md border shadow-lg relative transition-all duration-300 hover:shadow-xl ${
+          className={` flex gap-3 justify-center items-center px-4 py-3 rounded-2xl backdrop-blur-md border shadow-lg relative transition-all duration-300 hover:shadow-xl ${
             isOwn
               ? "bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white ml-2 rounded-br-md"
               : "bg-white/90 text-gray-800 mr-2 rounded-bl-md border-gray-200"

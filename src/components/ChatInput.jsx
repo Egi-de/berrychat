@@ -1,120 +1,167 @@
-import React, { useState, useRef } from "react";
-import { Send, Smile, Paperclip, Mic, Camera, X } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import EmojiPicker from "emoji-picker-react";
+
+import { Send, Paperclip, Mic, X, Image, File } from "lucide-react";
 import MediaPreview from "./MediaPreview";
 import VoiceRecorder from "./VoiceRecorder";
 
-const ChatInput = ({ onSendMessage, replyTo, onCancelReply }) => {
+const ChatInput = ({
+  onSendMessage,
+  replyTo,
+  onCancelReply,
+  disabled = false,
+  placeholder = "Type a message...",
+}) => {
   const [message, setMessage] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [showAttachments, setShowAttachments] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const fileInputRef = useRef();
-  const textareaRef = useRef();
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
 
-  const handleSend = (e) => {
-    // Prevent default form submission if this is called from a form
-    if (e) {
-      e.preventDefault();
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
     }
+  }, [message]);
 
-    if (message.trim() || selectedFiles.length > 0) {
-      onSendMessage({
-        text: message.trim(),
-        files: selectedFiles,
-        replyTo: replyTo?.id,
-        type: "text", // Ensure type is always set
-      });
-      setMessage("");
-      setSelectedFiles([]);
-      if (replyTo) onCancelReply();
-      // Reset textarea height
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-    }
-  };
-
+  // File selection
   const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    setSelectedFiles((prev) => [...prev, ...files]);
-    e.target.value = ""; // Reset input
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length) {
+      setFiles((prev) => [...prev, ...selectedFiles]);
+      setShowAttachments(false);
+    }
   };
 
-  const removeFile = (index) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeFile = (index) =>
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+
+  const getFileType = (file) => {
+    if (file.type.startsWith("image/")) return "image";
+    if (file.type.startsWith("video/")) return "video";
+    return "document";
   };
 
-  const startRecording = () => {
-    setIsRecording(true);
+  // Voice recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "audio/wav" });
+        const file = new File([blob], "voice_message.wav", {
+          type: "audio/wav",
+        });
+        handleSendVoiceMessage(file);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error(err);
+      alert("Microphone access denied");
+    }
   };
 
   const stopRecording = () => {
-    setIsRecording(false);
-    onSendMessage({
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
+  const handleSendVoiceMessage = (audioFile) => {
+    const messageData = {
       type: "voice",
-      text: "Voice message",
-      duration: Math.floor(Math.random() * 30) + 5, // Mock duration
-    });
+      files: [audioFile],
+      text: "",
+      ...(replyTo && { replyTo: replyTo.id }),
+    };
+    onSendMessage(messageData);
   };
 
-  const cancelRecording = () => {
-    setIsRecording(false);
-  };
-
-  const handleTextareaChange = (e) => {
-    setMessage(e.target.value);
-    // Auto-resize textarea
-    const textarea = e.target;
-    textarea.style.height = "auto";
-    textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+  // Sending message
+  const handleSend = () => {
+    if ((!message.trim() && files.length === 0) || disabled) return;
+    const messageData = {
+      text: message.trim(),
+      type: files.length ? getFileType(files[0]) : "text",
+      files: files.length ? files : null,
+      ...(replyTo && { replyTo: replyTo.id }),
+    };
+    onSendMessage(messageData);
+    setMessage("");
+    setFiles([]);
   };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend(e);
+      handleSend();
     }
   };
 
-  const quickEmojis = ["😀", "😂", "❤️", "👍", "🔥", "😍", "🎉", "💯"];
+  const onEmojiClick = (emojiData) => {
+    setMessage((prev) => prev + emojiData.emoji);
+    textareaRef.current?.focus();
+  };
+
+  if (isRecording) {
+    return (
+      <div className="p-4 bg-white/95 backdrop-blur-lg border-t border-gray-200">
+        <VoiceRecorder
+          onStop={stopRecording}
+          onCancel={stopRecording}
+          isRecording={isRecording}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 bg-white/90 backdrop-blur-lg border-t border-gray-200 shadow-lg">
+    <div className="bg-white/95 backdrop-blur-lg border-t border-gray-200">
       {/* Reply preview */}
       {replyTo && (
-        <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border-l-4 border-purple-400 flex justify-between items-start shadow-sm">
-          <div className="flex-1">
-            <div className="text-xs text-purple-600 font-semibold mb-1">
-              Replying to {replyTo.senderId === "user1" ? "You" : "Alice"}
+        <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+          <div className="flex items-center justify-between bg-purple-50 rounded-lg p-3">
+            <div className="flex-1">
+              <div className="text-sm font-medium text-purple-600 mb-1">
+                Replying to {replyTo.senderName || "Unknown"}
+              </div>
+              <div className="text-sm text-gray-700 truncate">
+                {replyTo.text || "📎 Media message"}
+              </div>
             </div>
-            <div className="text-sm text-gray-700 line-clamp-2">
-              {replyTo.text || "📎 Media message"}
-            </div>
+            <button
+              onClick={onCancelReply}
+              className="ml-2 p-1 hover:bg-purple-100 rounded-full transition-colors duration-200"
+            >
+              <X size={16} className="text-purple-600" />
+            </button>
           </div>
-          <button
-            onClick={onCancelReply}
-            className="ml-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-white rounded-full transition-all duration-200"
-          >
-            <X size={16} />
-          </button>
         </div>
       )}
 
-      {/* Media previews */}
-      {selectedFiles.length > 0 && (
-        <div className="mb-3 p-3 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-          <div className="flex flex-wrap gap-2">
-            {selectedFiles.map((file, index) => (
+      {/* File previews */}
+      {files.length > 0 && (
+        <div className="px-4 pt-3">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {files.map((file, index) => (
               <MediaPreview
                 key={index}
                 file={file}
-                type={
-                  file.type.startsWith("image/")
-                    ? "image"
-                    : file.type.startsWith("video/")
-                    ? "video"
-                    : "document"
-                }
+                type={getFileType(file)}
                 onRemove={() => removeFile(index)}
               />
             ))}
@@ -122,122 +169,115 @@ const ChatInput = ({ onSendMessage, replyTo, onCancelReply }) => {
         </div>
       )}
 
-      {/* Voice recording interface */}
-      {isRecording ? (
-        <VoiceRecorder
-          onStop={stopRecording}
-          onCancel={cancelRecording}
-          isRecording={isRecording}
-        />
-      ) : (
-        <form onSubmit={handleSend} className="space-y-3">
-          {/* Quick emoji bar */}
-          {showEmojiPicker && (
-            <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded-full animate-in slide-in-from-bottom-2 duration-200">
-              {quickEmojis.map((emoji, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => {
-                    setMessage((prev) => prev + emoji);
-                    setShowEmojiPicker(false);
-                  }}
-                  className="text-xl hover:scale-125 transition-transform duration-200 p-1 hover:bg-white rounded-full"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Main input area */}
-          <div className="flex items-end space-x-3">
-            {/* Attachment buttons */}
-            <div className="flex items-center space-x-1">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all duration-200 hover:scale-110 active:scale-95"
-                title="Attach file"
-              >
-                <Paperclip size={20} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  fileInputRef.current.accept = "image/*";
-                  fileInputRef.current?.click();
-                }}
-                className="p-2.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all duration-200 hover:scale-110 active:scale-95"
-                title="Take photo"
-              >
-                <Camera size={20} />
-              </button>
-            </div>
-
-            {/* Text input area */}
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={message}
-                onChange={handleTextareaChange}
-                onKeyDown={handleKeyPress}
-                placeholder="Type a message..."
-                rows={1}
-                className="w-full px-4 py-3 pr-12 bg-gray-100 hover:bg-gray-50 focus:bg-white rounded-2xl border-2 border-transparent focus:border-purple-300 outline-none resize-none transition-all duration-200 text-sm leading-relaxed"
-                style={{ maxHeight: "120px" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="absolute right-3 bottom-3 p-1.5 text-gray-400 hover:text-purple-600 rounded-full hover:bg-purple-50 transition-all duration-200"
-                title="Add emoji"
-              >
-                <Smile size={18} />
-              </button>
-            </div>
-
-            {/* Send/Voice button */}
+      {/* Attachment options */}
+      {showAttachments && (
+        <div className="px-4 pt-3">
+          <div className="flex space-x-3 pb-3">
             <button
-              type="submit"
-              onClick={
-                message.trim() || selectedFiles.length > 0
-                  ? undefined // Let form submission handle it
-                  : (e) => {
-                      e.preventDefault();
-                      startRecording();
-                    }
-              }
-              className={`p-3 rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
-                message.trim() || selectedFiles.length > 0
-                  ? "bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                  : "bg-gray-200 hover:bg-gray-300 text-gray-600"
-              }`}
-              title={
-                message.trim() || selectedFiles.length > 0
-                  ? "Send message"
-                  : "Record voice message"
-              }
+              onClick={() => imageInputRef.current?.click()}
+              className="flex items-center space-x-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-600 rounded-full transition-all duration-200 hover:scale-105"
             >
-              {message.trim() || selectedFiles.length > 0 ? (
-                <Send size={20} />
-              ) : (
-                <Mic size={20} />
-              )}
+              <Image size={16} />
+              <span className="text-sm font-medium">Photos</span>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full transition-all duration-200 hover:scale-105"
+            >
+              <File size={16} />
+              <span className="text-sm font-medium">Files</span>
+            </button>
+            <button
+              onClick={startRecording}
+              className="flex items-center space-x-2 px-4 py-2 bg-green-100 hover:bg-green-200 text-green-600 rounded-full transition-all duration-200 hover:scale-105"
+            >
+              <Mic size={16} />
+              <span className="text-sm font-medium">Voice</span>
             </button>
           </div>
-        </form>
+        </div>
       )}
 
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="image/*,video/*,.pdf,.doc,.docx,.txt"
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+      {/* Input area */}
+      <div className="p-4">
+        <div className="flex items-end space-x-3">
+          <button
+            onClick={() => setShowAttachments(!showAttachments)}
+            disabled={disabled}
+            className={`p-3 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${
+              showAttachments
+                ? "bg-purple-500 text-white"
+                : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            <Paperclip size={20} />
+          </button>
+
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={placeholder}
+              disabled={disabled}
+              className="w-full resize-none bg-gray-50 border-2 border-gray-200 rounded-3xl px-6 py-3 pr-12 focus:border-purple-400 focus:bg-white outline-none transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ minHeight: "48px", maxHeight: "120px" }}
+            />
+
+            {/* Emoji picker */}
+            <div className="absolute right-3 bottom-3">
+              <button
+                onClick={() => setShowEmojiPicker((prev) => !prev)}
+                disabled={disabled}
+                className="p-1 text-gray-400 hover:text-purple-500 transition-colors duration-200 disabled:opacity-50"
+              >
+                😊
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 right-0 z-50">
+                  <EmojiPicker onEmojiClick={onEmojiClick} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {message.trim() || files.length > 0 ? (
+            <button
+              onClick={handleSend}
+              disabled={disabled}
+              className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              <Send size={20} />
+            </button>
+          ) : (
+            <button
+              onClick={startRecording}
+              disabled={disabled}
+              className="p-3 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-purple-500 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            >
+              <Mic size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* Hidden file inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      </div>
     </div>
   );
 };
