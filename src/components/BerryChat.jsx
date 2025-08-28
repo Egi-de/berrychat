@@ -19,6 +19,16 @@ import ChatHeader from "./ChatHeader";
 import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 
+// Helper function to convert blob to base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 const BerryChat = () => {
   const { currentUser, logout } = useAuth();
   const [selectedChat, setSelectedChat] = useState(null);
@@ -55,11 +65,36 @@ const BerryChat = () => {
         const messageList = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
-          messageList.push({
+          let processedData = {
             id: doc.id,
             ...data,
             timestamp: data.timestamp?.toDate() || new Date(),
-          });
+          };
+
+          // For voice messages, convert base64 back to blob URL if needed
+          if (data.type === "voice" && data.voiceBlob && !data.mediaUrl) {
+            try {
+              // Convert base64 back to blob
+              const base64Data = data.voiceBlob.split(",")[1];
+              const mimeType = data.voiceBlob
+                .split(",")[0]
+                .split(":")[1]
+                .split(";")[0];
+              const byteCharacters = atob(base64Data);
+              const byteNumbers = new Array(byteCharacters.length);
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+              }
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], { type: mimeType });
+              const blobUrl = URL.createObjectURL(blob);
+              processedData.mediaUrl = blobUrl;
+            } catch (error) {
+              console.error("Error recreating blob URL:", error);
+            }
+          }
+
+          messageList.push(processedData);
         });
         setMessages(messageList);
 
@@ -107,7 +142,13 @@ const BerryChat = () => {
       return;
     }
 
-    if (!messageData.text?.trim() && !messageData.files?.length) {
+    // Updated validation to handle voice messages properly
+    const hasText = messageData.text?.trim();
+    const hasFiles = messageData.files?.length > 0;
+    const hasMediaUrl = messageData.mediaUrl;
+    const isVoiceMessage = messageData.type === "voice";
+
+    if (!hasText && !hasFiles && !hasMediaUrl && !isVoiceMessage) {
       console.error("Empty message");
       return;
     }
@@ -115,16 +156,46 @@ const BerryChat = () => {
     setSendingMessage(true);
     const chatId = selectedChat.chatId;
 
-    // Process files (in a real app, you'd upload these to Firebase Storage)
+    // Debug logging for voice messages
+    if (messageData.type === "voice") {
+      console.log("Sending voice message:", messageData);
+    }
+
+    // Process files safely - Skip file processing for voice messages
     let processedFiles = null;
-    if (messageData.files && messageData.files.length > 0) {
-      processedFiles = messageData.files.map((file) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        // In production, upload to Firebase Storage and store the download URL
-        url: URL.createObjectURL(file),
-      }));
+    if (
+      messageData.files &&
+      messageData.files.length > 0 &&
+      messageData.type !== "voice"
+    ) {
+      processedFiles = messageData.files.map((file) => {
+        let fileUrl = null;
+
+        try {
+          if (file instanceof File || file instanceof Blob) {
+            fileUrl = URL.createObjectURL(file);
+          } else if (file.__blob) {
+            // Handle our custom file objects
+            fileUrl = URL.createObjectURL(file.__blob);
+          } else if (file.url) {
+            // File already has a URL
+            fileUrl = file.url;
+          } else {
+            console.warn("Could not create URL for file:", file);
+            fileUrl = null;
+          }
+        } catch (error) {
+          console.error("Error creating object URL:", error);
+          fileUrl = null;
+        }
+
+        return {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          url: fileUrl,
+        };
+      });
     }
 
     const messagePayload = {
@@ -135,6 +206,13 @@ const BerryChat = () => {
       status: "sent",
       type: messageData.type || "text",
       ...(processedFiles && { files: processedFiles }),
+      // For voice messages, store the blob URL and blob data
+      ...(messageData.type === "voice" && {
+        mediaUrl: messageData.mediaUrl,
+        voiceBlob: messageData.files?.[0]?.blob
+          ? await blobToBase64(messageData.files[0].blob)
+          : null,
+      }),
       ...(messageData.replyTo && { replyTo: messageData.replyTo }),
     };
 

@@ -1,8 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Search, UserPlus, X, Phone, Mail, Loader } from "lucide-react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/config";
-import { updateDocument } from "../firestore/helpers";
+
 import Avatar from "./Avatar";
 
 const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
@@ -11,7 +18,7 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [addingContact, setAddingContact] = useState(null);
 
-  const searchUsers = async () => {
+  const searchUsers = useCallback(async () => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
       return;
@@ -20,43 +27,65 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
     setIsSearching(true);
     try {
       const usersRef = collection(db, "users");
-
-      // Search by email
-      const emailQuery = query(
-        usersRef,
-        where("email", "==", searchTerm.toLowerCase())
-      );
-      const emailSnapshot = await getDocs(emailQuery);
-
-      // Search by phone (if it looks like a phone number)
-      const phoneQuery =
-        searchTerm.startsWith("+") || /^\d+$/.test(searchTerm)
-          ? query(usersRef, where("phoneNumber", "==", searchTerm))
-          : null;
-      const phoneSnapshot = phoneQuery ? await getDocs(phoneQuery) : null;
-
-      // Search by display name (partial match)
-      const nameQuery = query(
-        usersRef,
-        where("displayName", ">=", searchTerm),
-        where("displayName", "<=", searchTerm + "\uf8ff")
-      );
-      const nameSnapshot = await getDocs(nameQuery);
-
       const results = new Map();
 
-      // Combine results
-      [emailSnapshot, phoneSnapshot, nameSnapshot].forEach((snapshot) => {
-        if (snapshot) {
-          snapshot.forEach((doc) => {
+      // Search by email - exact match
+      if (searchTerm.includes("@")) {
+        try {
+          const emailQuery = query(
+            usersRef,
+            where("email", "==", searchTerm.toLowerCase())
+          );
+          const emailSnapshot = await getDocs(emailQuery);
+          emailSnapshot.forEach((doc) => {
             const userData = { id: doc.id, ...doc.data() };
-            // Don't include current user in results
             if (userData.uid !== currentUser.uid) {
               results.set(userData.uid, userData);
             }
           });
+        } catch (error) {
+          console.log("Email search error:", error);
         }
-      });
+      }
+
+      // Search by phone - exact match
+      if (searchTerm.startsWith("+") || /^\d+$/.test(searchTerm)) {
+        try {
+          const phoneQuery = query(
+            usersRef,
+            where("phoneNumber", "==", searchTerm)
+          );
+          const phoneSnapshot = await getDocs(phoneQuery);
+          phoneSnapshot.forEach((doc) => {
+            const userData = { id: doc.id, ...doc.data() };
+            if (userData.uid !== currentUser.uid) {
+              results.set(userData.uid, userData);
+            }
+          });
+        } catch (error) {
+          console.log("Phone search error:", error);
+        }
+      }
+
+      // Search by display name - partial match
+      if (!searchTerm.includes("@") && !/^\+?\d+$/.test(searchTerm)) {
+        try {
+          const nameQuery = query(
+            usersRef,
+            where("displayName", ">=", searchTerm),
+            where("displayName", "<=", searchTerm + "\uf8ff")
+          );
+          const nameSnapshot = await getDocs(nameQuery);
+          nameSnapshot.forEach((doc) => {
+            const userData = { id: doc.id, ...doc.data() };
+            if (userData.uid !== currentUser.uid) {
+              results.set(userData.uid, userData);
+            }
+          });
+        } catch (error) {
+          console.log("Name search error:", error);
+        }
+      }
 
       setSearchResults(Array.from(results.values()));
     } catch (error) {
@@ -65,7 +94,21 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [searchTerm, currentUser]);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      searchUsers();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, searchUsers]);
 
   const addContact = async (userToAdd) => {
     setAddingContact(userToAdd.uid);
@@ -81,21 +124,20 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
 
       // Add to current user's contacts
       const updatedContacts = [...currentContacts, userToAdd.uid];
-      const result = await updateDocument("users", currentUser.uid, {
+
+      // Try using Firebase's updateDoc directly
+      const userDocRef = doc(db, "users", currentUser.uid);
+      await updateDoc(userDocRef, {
         contacts: updatedContacts,
       });
 
-      if (result.success) {
-        onContactAdded(userToAdd);
-        setSearchTerm("");
-        setSearchResults([]);
-        alert(`${userToAdd.displayName} added to contacts!`);
-      } else {
-        alert("Failed to add contact: " + result.error);
-      }
+      onContactAdded(userToAdd);
+      setSearchTerm("");
+      setSearchResults([]);
+      alert(`${userToAdd.displayName} added to contacts!`);
     } catch (error) {
       console.error("Error adding contact:", error);
-      alert("Failed to add contact");
+      alert("Failed to add contact: " + error.message);
     } finally {
       setAddingContact(null);
     }
@@ -103,10 +145,17 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
-    // Debounce search
-    const timeoutId = setTimeout(searchUsers, 500);
-    return () => clearTimeout(timeoutId);
   };
+
+  // Reset search when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm("");
+      setSearchResults([]);
+      setIsSearching(false);
+      setAddingContact(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -135,7 +184,7 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
             value={searchTerm}
             onChange={handleSearch}
             placeholder="Search by email, phone, or name..."
-            className="w-full pl-11 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-purple-400 focus:bg-white outline-none transition-all duration-200"
+            className="w-full pl-11 pr-4 py-3 text-black bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-purple-400 focus:bg-white outline-none transition-all duration-200"
           />
           {isSearching && (
             <Loader
@@ -173,25 +222,6 @@ const AddContactModal = ({ isOpen, onClose, currentUser, onContactAdded }) => {
                   <div className="font-semibold text-gray-800 truncate">
                     {user.displayName}
                   </div>
-                  <div className="flex items-center space-x-3 text-sm text-gray-500">
-                    {user.email && (
-                      <div className="flex items-center space-x-1">
-                        <Mail size={12} />
-                        <span className="truncate">{user.email}</span>
-                      </div>
-                    )}
-                    {user.phoneNumber && (
-                      <div className="flex items-center space-x-1">
-                        <Phone size={12} />
-                        <span>{user.phoneNumber}</span>
-                      </div>
-                    )}
-                  </div>
-                  {user.bio && (
-                    <div className="text-xs text-gray-400 truncate mt-1">
-                      {user.bio}
-                    </div>
-                  )}
                 </div>
               </div>
 

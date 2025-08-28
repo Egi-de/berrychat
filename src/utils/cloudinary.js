@@ -4,21 +4,25 @@ export const CLOUDINARY_CONFIG = {
 };
 
 /**
- * Upload image to Cloudinary using unsigned upload
- * @param {File|Blob} file - The image file to upload
+ * Upload any file type to Cloudinary using unsigned upload
+ * @param {File|Blob} file - The file to upload
  * @param {Object} options - Upload options
  * @returns {Promise<Object>} Upload result
  */
-
 export const uploadToCloudinary = async (file, options = {}) => {
-  const { folder = "berrychat/avatars", tags = ["avatar", "profile"] } =
-    options;
+  const {
+    folder = "berrychat/avatars",
+    tags = ["avatar", "profile"],
+    resourceType = "auto",
+    publicId,
+    uploadPreset = CLOUDINARY_CONFIG.uploadPreset,
+  } = options;
 
   try {
     const formData = new FormData();
 
     formData.append("file", file);
-    formData.append("upload_preset", CLOUDINARY_CONFIG.uploadPreset);
+    formData.append("upload_preset", uploadPreset);
 
     if (folder) {
       formData.append("folder", folder);
@@ -28,12 +32,42 @@ export const uploadToCloudinary = async (file, options = {}) => {
       formData.append("tags", tags.join(","));
     }
 
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 8);
-    formData.append("public_id", `avatar_${timestamp}_${randomId}`);
+    // Auto-generate public ID if not provided
+    const finalPublicId =
+      publicId ||
+      `${folder.split("/").pop()}_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2)}`;
+    formData.append("public_id", finalPublicId);
+
+    // Determine the correct endpoint based on resource type
+    let endpoint = "image/upload"; // default
+
+    if (resourceType === "raw") {
+      endpoint = "raw/upload";
+    } else if (
+      resourceType === "video" ||
+      file.type.startsWith("video/") ||
+      file.type.startsWith("audio/")
+    ) {
+      endpoint = "video/upload";
+    } else if (
+      !file.type.startsWith("image/") &&
+      !file.type.startsWith("video/") &&
+      !file.type.startsWith("audio/")
+    ) {
+      endpoint = "raw/upload";
+    }
+
+    console.log("Cloudinary upload:", {
+      fileType: file.type,
+      resourceType,
+      endpoint,
+      fileName: file.name || "unknown",
+    });
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/${endpoint}`,
       {
         method: "POST",
         body: formData,
@@ -62,23 +96,25 @@ export const uploadToCloudinary = async (file, options = {}) => {
       publicId: data.public_id,
       width: data.width,
       height: data.height,
+      duration: data.duration,
       format: data.format,
       bytes: data.bytes,
       resourceType: data.resource_type,
       createdAt: data.created_at,
+      eagerUrl: data.eager?.[0]?.secure_url,
     };
   } catch (error) {
     console.error("Cloudinary upload error:", error);
     return {
       success: false,
-      error: error.message || "Failed to upload image",
+      error: error.message || "Failed to upload file",
     };
   }
 };
 
 export const deleteFromCloudinary = async (publicId) => {
   console.warn(
-    "Image deletion is not supported with unsigned uploads. " +
+    "File deletion is not supported with unsigned uploads. " +
       "Implement deletion on your backend server with API credentials."
   );
 
@@ -90,7 +126,7 @@ export const deleteFromCloudinary = async (publicId) => {
 };
 
 /**
- * Generate Cloudinary URL with transformations
+ * Generate Cloudinary URL with transformations for images
  * @param {string} publicId - The public ID of the image
  * @param {Object} transformations - Transformation options
  * @returns {string} Transformed image URL
@@ -171,14 +207,14 @@ export const getResponsiveUrls = (publicId, sizes = []) => {
 };
 
 /**
- * Validate image file before upload
+ * Enhanced file validation for different types
  * @param {File} file - The file to validate
  * @param {Object} options - Validation options
  * @returns {Object} Validation result
  */
 export const validateImageFile = (file, options = {}) => {
   const {
-    maxSize = 10 * 1024 * 1024,
+    maxSize = 10 * 1024 * 1024, // 10MB default
     allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"],
     minWidth = 100,
     minHeight = 100,
@@ -194,7 +230,9 @@ export const validateImageFile = (file, options = {}) => {
   if (!allowedTypes.includes(file.type)) {
     return {
       valid: false,
-      error: `Invalid file type. Allowed types: ${allowedTypes.join(", ")}`,
+      error: `Invalid file type. Allowed types: ${allowedTypes
+        .map((t) => t.split("/")[1])
+        .join(", ")}`,
     };
   }
 
@@ -246,7 +284,126 @@ export const validateImageFile = (file, options = {}) => {
 };
 
 /**
- * Helper function to handle upload with validation
+ * Validate any file type for chat uploads
+ * @param {File} file - The file to validate
+ * @param {Object} options - Validation options
+ * @returns {Object} Validation result
+ */
+export const validateChatFile = (file, options = {}) => {
+  const {
+    maxSize = 50 * 1024 * 1024, // 50MB for chat files
+    allowedImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"],
+    allowedVideoTypes = ["video/mp4", "video/webm", "video/quicktime"],
+    allowedAudioTypes = [
+      "audio/mp3",
+      "audio/wav",
+      "audio/ogg",
+      "audio/m4a",
+      "audio/webm",
+    ],
+    allowedDocumentTypes = [
+      "application/pdf",
+      "text/plain",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+  } = options;
+
+  if (!file) {
+    return {
+      valid: false,
+      error: "No file provided",
+    };
+  }
+
+  const allAllowedTypes = [
+    ...allowedImageTypes,
+    ...allowedVideoTypes,
+    ...allowedAudioTypes,
+    ...allowedDocumentTypes,
+  ];
+
+  if (!allAllowedTypes.includes(file.type)) {
+    return {
+      valid: false,
+      error: `Unsupported file type: ${file.type}`,
+    };
+  }
+
+  if (file.size > maxSize) {
+    const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+    return {
+      valid: false,
+      error: `File too large. Maximum size is ${maxSizeMB}MB.`,
+    };
+  }
+
+  // Additional validation for images
+  if (file.type.startsWith("image/")) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({
+          valid: true,
+          width: img.width,
+          height: img.height,
+        });
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({
+          valid: false,
+          error: "Invalid image file",
+        });
+      };
+
+      img.src = objectUrl;
+    });
+  }
+
+  return {
+    valid: true,
+  };
+};
+
+/**
+ * Helper function to handle upload with validation for chat files
+ * @param {File} file - The file to upload
+ * @param {Object} options - Combined options for validation and upload
+ * @returns {Promise<Object>} Upload result with validation
+ */
+export const uploadChatFileWithValidation = async (file, options = {}) => {
+  const validation = await validateChatFile(file, options.validation);
+
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: validation.error,
+      stage: "validation",
+    };
+  }
+
+  const uploadResult = await uploadToCloudinary(file, options.upload);
+
+  if (uploadResult.success) {
+    return {
+      ...uploadResult,
+      validation: {
+        originalWidth: validation.width,
+        originalHeight: validation.height,
+      },
+    };
+  }
+
+  return uploadResult;
+};
+
+/**
+ * Helper function to handle upload with validation for avatars
  * @param {File} file - The file to upload
  * @param {Object} options - Combined options for validation and upload
  * @returns {Promise<Object>} Upload result with validation
@@ -289,12 +446,12 @@ export const batchUpload = async (files, options = {}) => {
 
   for (const [index, file] of fileArray.entries()) {
     try {
-      const result = await uploadWithValidation(file, {
+      const result = await uploadChatFileWithValidation(file, {
         ...options,
         upload: {
           ...options.upload,
           folder:
-            options.upload?.folder || `berrychat/avatars/batch_${Date.now()}`,
+            options.upload?.folder || `berrychat/chat/batch_${Date.now()}`,
         },
       });
 
