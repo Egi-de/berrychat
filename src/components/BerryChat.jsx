@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   writeBatch,
   doc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 import { createDocument } from "../firestore/helpers";
@@ -65,6 +66,10 @@ const BerryChat = () => {
         const messageList = [];
         snapshot.forEach((doc) => {
           const data = doc.data();
+
+          // Skip deleted messages
+          if (data.deleted) return;
+
           let processedData = {
             id: doc.id,
             ...data,
@@ -261,6 +266,18 @@ const BerryChat = () => {
     setReplyTo(message);
   };
 
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      const messageRef = doc(db, "messages", messageId);
+      await updateDoc(messageRef, {
+        deleted: true,
+        deletedAt: new Date(),
+      });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+    }
+  };
+
   const getReplyToMessage = (replyToId) => {
     return messages.find((msg) => msg.id === replyToId);
   };
@@ -339,6 +356,7 @@ const BerryChat = () => {
                           user={user}
                           onReply={handleReply}
                           replyToMessage={replyToMessage}
+                          onDeleteMessage={handleDeleteMessage}
                         />
                       );
                     })

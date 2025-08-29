@@ -18,6 +18,12 @@ import {
   CheckCheck,
   Check,
   LogOut,
+  X,
+  Globe,
+  Shield,
+  HelpCircle,
+  Info,
+  User,
 } from "lucide-react";
 import {
   collection,
@@ -54,6 +60,276 @@ const MessageStatus = ({ status }) => {
   return getStatusIcon();
 };
 
+// Settings Modal Component
+const SettingsModal = ({
+  isOpen,
+  onClose,
+  userProfile,
+  onUpdateProfile,
+  onLogout,
+}) => {
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(
+    userProfile?.settings?.language || "en"
+  );
+
+  if (!isOpen) return null;
+
+  const handleLanguageChange = async (language) => {
+    setSelectedLanguage(language);
+    try {
+      await onUpdateProfile({
+        settings: {
+          ...userProfile?.settings,
+          language: language,
+        },
+      });
+      setShowLanguageModal(false);
+    } catch (error) {
+      console.error("Error updating language:", error);
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to logout?")) {
+      onClose();
+      onLogout();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-bold text-gray-900">Settings</h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
+          >
+            <X size={20} className="text-gray-600" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <button
+            onClick={() => setShowLanguageModal(true)}
+            className="w-full flex items-center justify-between p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <Globe size={20} className="text-gray-600" />
+              <span className="font-medium text-gray-900">Language</span>
+            </div>
+            <span className="text-sm text-gray-500 capitalize">
+              {selectedLanguage === "en" ? "English" : selectedLanguage}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setShowPrivacyModal(true)}
+            className="w-full flex items-center space-x-3 p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            <Shield size={20} className="text-gray-600" />
+            <span className="font-medium text-gray-900">
+              Privacy & Security
+            </span>
+          </button>
+
+          <button
+            onClick={() => setShowHelpModal(true)}
+            className="w-full flex items-center space-x-3 p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            <HelpCircle size={20} className="text-gray-600" />
+            <span className="font-medium text-gray-900">Help & Support</span>
+          </button>
+
+          <button
+            onClick={() => setShowAboutModal(true)}
+            className="w-full flex items-center space-x-3 p-3 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+          >
+            <Info size={20} className="text-gray-600" />
+            <span className="font-medium text-gray-900">About</span>
+          </button>
+
+          <hr className="my-4 border-gray-200" />
+
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center space-x-3 p-3 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
+          >
+            <LogOut size={20} className="text-red-500" />
+            <span className="font-medium text-red-500">Logout</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Language Selection Modal */}
+      {showLanguageModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                Select Language
+              </h3>
+              <button
+                onClick={() => setShowLanguageModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                { code: "en", name: "English", flag: "🇺🇸" },
+                { code: "es", name: "Español", flag: "🇪🇸" },
+                { code: "fr", name: "Français", flag: "🇫🇷" },
+                { code: "de", name: "Deutsch", flag: "🇩🇪" },
+                { code: "it", name: "Italiano", flag: "🇮🇹" },
+                { code: "pt", name: "Português", flag: "🇵🇹" },
+              ].map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageChange(lang.code)}
+                  className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-colors ${
+                    selectedLanguage === lang.code
+                      ? "bg-blue-100 border-2 border-blue-500"
+                      : "bg-gray-100 hover:bg-gray-200"
+                  }`}
+                >
+                  <span className="text-2xl">{lang.flag}</span>
+                  <span className="font-medium text-gray-900">{lang.name}</span>
+                  {selectedLanguage === lang.code && (
+                    <Check size={16} className="text-blue-500 ml-auto" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy & Security Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                Privacy & Security
+              </h3>
+              <button
+                onClick={() => setShowPrivacyModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  End-to-End Encryption
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Your messages are secured with end-to-end encryption. Only you
+                  and the recipient can read them.
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Data Protection
+                </h4>
+                <p className="text-sm text-gray-600">
+                  We don't store your messages on our servers. All data is
+                  encrypted and stored locally.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Help & Support Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                Help & Support
+              </h3>
+              <button
+                onClick={() => setShowHelpModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Getting Started
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Add contacts using their email or phone number to start
+                  chatting.
+                </p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  Contact Support
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Need help? Email us at support@berrychat.com
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About Modal */}
+      {showAboutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                About BerryChat
+              </h3>
+              <button
+                onClick={() => setShowAboutModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                  <MessageSquare size={32} className="text-white" />
+                </div>
+                <h4 className="font-bold text-gray-900 text-lg">BerryChat</h4>
+                <p className="text-sm text-gray-600">Version 1.0.0</p>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <p className="text-sm text-gray-600 text-center">
+                  A secure, modern messaging app built with React and Firebase.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
   const { currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,6 +338,7 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
   const [showAddContact, setShowAddContact] = useState(false);
   const [showMainMenu, setShowMainMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [chats, setChats] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
@@ -384,6 +661,7 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
         {/* Bottom Icons */}
         <div className="flex-1 flex flex-col justify-end items-center space-y-3 pb-10">
           <button
+            onClick={() => setShowSettings(true)}
             className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-200"
             title="Settings"
           >
@@ -494,6 +772,7 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
 
                     <button
                       onClick={() => {
+                        setShowSettings(true);
                         setShowMainMenu(false);
                       }}
                       className="w-full px-3 py-2 text-left text-gray-300 hover:bg-gray-700 transition-colors flex items-center space-x-2 text-sm"
@@ -747,6 +1026,14 @@ const ChatList = ({ onSelectChat, selectedChat, onLogout }) => {
         isOpen={showProfile}
         onClose={() => setShowProfile(false)}
         onUpdateProfile={handleUpdateProfile}
+      />
+
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        userProfile={userProfile}
+        onUpdateProfile={handleUpdateProfile}
+        onLogout={onLogout}
       />
 
       {/* Click outside handlers */}

@@ -19,6 +19,10 @@ import {
   Settings,
   LogOut,
   Plus,
+  MoreVertical,
+  Copy,
+  Forward,
+  Star,
 } from "lucide-react";
 
 const MessageBubble = ({
@@ -28,6 +32,7 @@ const MessageBubble = ({
   onReply,
   replyToMessage,
   onMessageSeen,
+  onDeleteMessage,
 }) => {
   const [showReplyButton, setShowReplyButton] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
@@ -36,12 +41,48 @@ const MessageBubble = ({
   const [voiceProgress, setVoiceProgress] = useState(0);
   const [voiceDuration, setVoiceDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [showDropdown, setShowDropdown] = useState(false);
   const audioRef = useRef(null);
   const messageRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showDropdown]);
 
   const openFullPreview = (imageUrl) => {
     setFullPreviewUrl(imageUrl);
     setShowFullPreview(true);
+  };
+
+  const handleCopyMessage = () => {
+    if (message.text) {
+      navigator.clipboard.writeText(message.text);
+      setShowDropdown(false);
+    }
+  };
+
+  const handleDeleteMessage = () => {
+    if (window.confirm("Are you sure you want to delete this message?")) {
+      onDeleteMessage?.(message.id);
+      setShowDropdown(false);
+    }
+  };
+
+  const handleReplyMessage = () => {
+    onReply?.(message);
+    setShowDropdown(false);
   };
 
   const formatFileSize = (bytes) => {
@@ -502,10 +543,82 @@ const MessageBubble = ({
             <div className="break-words leading-relaxed">{message.text}</div>
           )}
           <div
-            className={`flex items-center justify-end mt-2 text-xs space-x-1 ${
+            className={`flex items-center justify-between mt-2 text-xs ${
               isOwn ? "text-white/70" : "text-gray-500"
             }`}
           >
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className={`p-1 rounded-full transition-all duration-200 hover:scale-110 ${
+                  isOwn
+                    ? "hover:bg-white/20 text-white/70 hover:text-white"
+                    : "hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                }`}
+                title="Message options"
+              >
+                <MoreVertical size={14} />
+              </button>
+
+              {showDropdown && (
+                <div
+                  className={`absolute bottom-full left-0 mb-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 ${
+                    isOwn ? "right-0 left-auto" : ""
+                  }`}
+                >
+                  <button
+                    onClick={handleReplyMessage}
+                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors flex items-center space-x-2"
+                  >
+                    <Reply size={14} />
+                    <span>Reply</span>
+                  </button>
+
+                  {message.text && (
+                    <button
+                      onClick={handleCopyMessage}
+                      className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors flex items-center space-x-2"
+                    >
+                      <Copy size={14} />
+                      <span>Copy</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      /* Forward functionality */
+                    }}
+                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors flex items-center space-x-2"
+                  >
+                    <Forward size={14} />
+                    <span>Forward</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      /* Star functionality */
+                    }}
+                    className="w-full px-4 py-2 text-left text-gray-700 hover:bg-gray-100 transition-colors flex items-center space-x-2"
+                  >
+                    <Star size={14} />
+                    <span>Star</span>
+                  </button>
+
+                  <hr className="my-1 border-gray-200" />
+
+                  {isOwn && (
+                    <button
+                      onClick={handleDeleteMessage}
+                      className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             <span className="font-medium">
               {new Date(message.timestamp).toLocaleTimeString([], {
                 hour: "2-digit",
